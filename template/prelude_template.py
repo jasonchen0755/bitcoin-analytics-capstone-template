@@ -243,9 +243,9 @@ def group_ranges_by_start_date(
 
 
 def compute_cycle_spd(
-    dataframe: pd.DataFrame,
-    strategy_function,
-    features_df: pd.DataFrame | None = None,
+    dataframe: pd.DataFrame, #btc_df
+    strategy_function,#compute weight wrapper
+    features_df: pd.DataFrame | None = None,#_SIGNAL
     start_date: str | None = None,
     end_date: str | None = None,
     validate_weights: bool = True,
@@ -265,17 +265,34 @@ def compute_cycle_spd(
     Returns:
         DataFrame with SPD statistics indexed by window label
     """
-    start = start_date or BACKTEST_START
-    end = end_date or BACKTEST_END
+    start = start_date or BACKTEST_START #2018-01-01
+    end = end_date or BACKTEST_END #2025-12-31
+    print('==================================')
+    print(f'start:{start}, end:{end}, strategy_fn: {strategy_function}')
+    # print(f'features_df: \n{features_df.iloc[:2]}')
     if end is None:
         end = dataframe.index.max().strftime("%Y-%m-%d")
 
     # Use provided features or compute them
     if features_df is None:
-        full_feat = precompute_features(dataframe).loc[start:end]
+        from model.dca import (_prepare_dataset, 
+                               _predict_return, 
+                               compute_quantile_winrate, 
+                               compute_quantile_layered_return,
+                               compute_signal)
+        
+        features, targets = _prepare_dataset()
+        # start, end = features.index.min(), features.index.max()
+        # start, end = max(pd.Timestamp(start), pd.Timestamp('2018-01-01')), min(pd.Timestamp(end), pd.Timestamp('2025-12-31'))
+        prediction = _predict_return(features, targets)
+        lag_res, quantiles = compute_quantile_winrate(features, targets)
+        quantile_layered_return = compute_quantile_layered_return(features, lag_res, quantiles)
+        df = pd.concat([prediction, quantile_layered_return], axis=1).reset_index().set_index('time').sort_index()
+        full_feat = compute_signal(df)#.loc[start, end], start, end)
+        # full_feat = precompute_features(dataframe).loc[start:end]
     else:
-        full_feat = features_df.loc[start:end]
-
+        full_feat = features_df.loc[pd.date_range(start,end)]
+    # print(f"full_feat: {full_feat.iloc[:10]}")
     window_offset = WINDOW_OFFSET
 
     # Generate start dates daily
@@ -299,16 +316,20 @@ def compute_cycle_spd(
         window_end = window_start + window_offset
 
         # Only include if end_date is within range
+        # print(f'window start: {window_start}, end: {window_end}')
         if window_end > pd.to_datetime(end):
             continue
 
         price_slice = dataframe["PriceUSD_coinmetrics"].loc[window_start:window_end]
+        # print(f'price_slce: {price_slice.iloc[:10]}')
         if price_slice.empty:
             continue
 
         # Compute weights using strategy_function
-        window_feat = full_feat.loc[window_start:window_end]
+        window_feat = full_feat.loc[pd.date_range(window_start,window_end)]
+        # print(f'window_feat: {window_feat.iloc[:10]}, \n{window_feat.iloc[-10:]}')
         weight_slice = strategy_function(window_feat)
+        # print(f'weight_slice: {weight_slice.iloc[:10]}, \n{weight_slice.iloc[-10:]}')
 
         # Validate weights sum to 1.0 if requested
         if validate_weights:
@@ -320,10 +341,12 @@ def compute_cycle_spd(
             validated_windows += 1
 
         inv_price = 1e8 / price_slice  # sats per dollar
+        # print(f'inv_price: {inv_price.iloc[:10], inv_price.iloc[-10:]}')
         min_spd, max_spd = inv_price.min(), inv_price.max()
         span = max_spd - min_spd
         uniform_spd = inv_price.mean()
         dynamic_spd = (weight_slice * inv_price).sum()
+        # print(f'dynamice_spd: {dynamic_spd}')
 
         # Handle edge case where span is zero (all prices identical)
         if span > 0:
@@ -351,14 +374,13 @@ def compute_cycle_spd(
         logging.info(
             f"✓ Validated weight sums for {validated_windows} windows (all sum to 1.0)"
         )
-
+    print(f'dynamic spd mean: {pd.DataFrame(results)['dynamic_sats_per_dollar'].mean()}\n==================================')
     return pd.DataFrame(results).set_index("window")
 
-
 def backtest_dynamic_dca(
-    dataframe: pd.DataFrame,
-    strategy_function,
-    features_df: pd.DataFrame | None = None,
+    dataframe: pd.DataFrame,#btc_df
+    strategy_function,#compute_weight_wrapper
+    features_df: pd.DataFrame | None = None,#_SIGNAL
     *,
     strategy_label: str = "strategy",
     start_date: str | None = None,
@@ -379,6 +401,8 @@ def backtest_dynamic_dca(
     Returns:
         Tuple of (SPD table DataFrame, exponential-decay average percentile)
     """
+    # print(f'btc_df :{dataframe.iloc[:10]} \n {dataframe.iloc[-10:]}')
+    # print(f'signal : {features_df.iloc[:10]} \n{features_df.iloc[-10:]}')    
     spd_table = compute_cycle_spd(
         dataframe,
         strategy_function,
@@ -395,7 +419,12 @@ def backtest_dynamic_dca(
     exp_weights /= exp_weights.sum()
     exp_avg_pct = (dynamic_pct.values * exp_weights).sum()
 
+    # print('SPD:\n', dynamic_spd)
+    # print(f'dynamic spd min-max-mean-median: {dynamic_spd.min(), dynamic_spd.max(), dynamic_spd.mean(), dynamic_spd.median()}')
+    # print(f'dynamic pct min-max-mean-median: {dynamic_pct.min(), dynamic_pct.max(), dynamic_pct.mean(), dynamic_pct.median()}')
     logging.info(f"Aggregated Metrics for {strategy_label}:")
+    # print(f"  SPD: min={dynamic_spd.min():.2f}, max={dynamic_spd.max():.2f}, ")
+    # print(f"mean={dynamic_spd.mean():.2f}, median={dynamic_spd.median():.2f}")
     logging.info(
         f"  SPD: min={dynamic_spd.min():.2f}, max={dynamic_spd.max():.2f}, "
         f"mean={dynamic_spd.mean():.2f}, median={dynamic_spd.median():.2f}"
@@ -409,7 +438,8 @@ def backtest_dynamic_dca(
     return spd_table, exp_avg_pct
 
 
-def check_strategy_submission_ready(dataframe: pd.DataFrame, strategy_function) -> None:
+def check_strategy_submission_ready(dataframe: pd.DataFrame, # btc_df
+                                    strategy_function) -> None: # compute_weights_wrapper
     """Validate strategy: no future data, valid weights, ≥50% win rate vs uniform DCA."""
     print("Validating strategy submission readiness...")
     passed = True

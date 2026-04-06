@@ -408,8 +408,9 @@ def run_full_analysis(
         features_df=features_df,
         strategy_label=strategy_label,
     )
-
+ 
     logging.info("Running strategy validation...")
+    # check_strategy_submission_ready(btc_df, compute_weights_fn)
     check_strategy_submission_ready(btc_df, compute_weights_fn)
 
     # Calculate metrics

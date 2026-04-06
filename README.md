@@ -139,3 +139,12 @@ When evaluating strategies, you might consider the following metrics (which are 
 * **App:** [stackingsats.org](https://www.stackingsats.org/)
 * **Website:** [trilemma.foundation](https://www.trilemma.foundation/)
 * **Foundation:** [Trilemma Foundation](https://github.com/TrilemmaFoundation)
+
+
+## feature selection
+
+**Linear Regression Results for features with R2>0.10 on predicting future return**
+```bash
+python -m model.feature_selection
+```
+

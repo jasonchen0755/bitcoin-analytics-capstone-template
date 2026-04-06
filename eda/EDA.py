@@ -508,4 +508,31 @@ class POLY():
         )
         return daily_stats
     
+def mean_reversion_plot(series:pd.Series):
+    """
+    plot mean reversion force for series
+    """
+    import matplotlib.pyplot as plt
 
+    ma7 = series.rolling(window=7, min_periods=3).mean()
+    ma30 = series.rolling(window=30, min_periods=15).mean()
+    ma90 = series.rolling(window=90, min_periods=45).mean()
+    ma365 = series.rolling(window=365, min_periods=182).mean()
+
+    fig, ax = plt.subplots(1,2, figsize=(20,5))
+    ax[0].plot(series - ma7, label=f'{series.name} deviate ma7')
+    ax[0].plot(series - ma30, label=f'{series.name} deviate ma30')
+    ax[0].plot(series - ma90, label=f'{series.name} deviate ma90')
+    ax[0].plot(series - ma365, label=f'{series.name} deviate ma365')
+    ax[0].set_title(f'{series.name} deviate from MAs')
+    ax[0].grid()
+    ax[0].legend()
+
+    ax[1].plot(ma7 - ma30, label='ma7 deviate from ma30')
+    ax[1].plot(ma30 - ma90, label='ma30 deviate from ma90')
+    ax[1].plot(ma90 - ma365, label='ma90 deviate from ma365')
+    ax[1].set_title(f'{series.name} LT/ST MA Convergence')
+    ax[1].grid()
+    ax[1].legend()
+
+    plt.show()

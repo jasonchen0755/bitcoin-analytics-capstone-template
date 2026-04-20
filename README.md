@@ -17,7 +17,7 @@ Extra packages installations are needed to run backtest. Screen shots of backtes
     ```bash
     python -m model.LinReg_backtest
     ```
-    <img src='model/output_LinReg/LinReg_backtest_screenshot.png' width='1000'>
+    <img src='model/output_LinReg/LinReg_backtest_screenshot.png' width='800'>
 
     This simplest predictive method gets **50.29%** win rate, which is not very different from uniform strategy. All backtest ouputs were saved in folder 'model/output_LinReg'.
 
@@ -26,7 +26,7 @@ Extra packages installations are needed to run backtest. Screen shots of backtes
     python -m model.mamba_backtest
     ```
 
-    <img src='model/output_mamba/mamba_backtest_screenshot.png' width='1000'>
+    <img src='model/output_mamba/mamba_backtest_screenshot.png' width='800'>
 
     This method outputs far more reliable signals and gets **66.45%** win rate. To further improve it, finer retraining interval and/or finding other informative signal could be viable direction. All backtest ouputs were saved in folder 'model/output_mamba'.
 
@@ -159,7 +159,7 @@ Extra packages installations are needed to run backtest. Screen shots of backtes
 
 1.  **Paradigm Shift Detection**
 
-    Run below bash command, the custom-backtest function cares about the history Mamba method competing with Uniform strategy. The vertical dash line represent the time we periodically switch pre-trained models.
+    Run below bash command, the custom-backtest function cares about the history Mamba method competing with Uniform strategy. The vertical dash line represent the time we periodically switch pre-trained models. Green bars means our strategy is wining, red bars means uniform strategy beat us, and some sparse orange dots alone horizontal zero line are ties.
 
     ```bash
     python -c 'from model.mamba_backtest import custom_backtest; custom_backtest()'

@@ -30,7 +30,12 @@ tqdm==4.67.1
 typing_extensions==4.15.0
 tzdata==2025.3
 urllib3==2.6.3
+
 yfinance==1.1.0
 ipykernel==7.1.0
 statsmodels==0.14.6
 scikit-learn==1.8.0
+hmmlearn==0.3.3
+
+torch==2.11.0
+mamba_ssm==2.3.1

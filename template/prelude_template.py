@@ -275,7 +275,7 @@ def compute_cycle_spd(
 
     # Use provided features or compute them
     if features_df is None:
-        from model.dca import (_prepare_dataset, 
+        from model.LinReg import (_prepare_dataset, 
                                _predict_return, 
                                compute_quantile_winrate, 
                                compute_quantile_layered_return,
@@ -374,7 +374,7 @@ def compute_cycle_spd(
         logging.info(
             f"✓ Validated weight sums for {validated_windows} windows (all sum to 1.0)"
         )
-    print(f'dynamic spd mean: {pd.DataFrame(results)['dynamic_sats_per_dollar'].mean()}\n==================================')
+    # print(f'dynamic spd mean: {pd.DataFrame(results)['dynamic_sats_per_dollar'].mean()}\n==================================')
     return pd.DataFrame(results).set_index("window")
 
 def backtest_dynamic_dca(

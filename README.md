@@ -1,150 +1,196 @@
-# Stacking Sats: Improving Bitcoin Accumulation 
+# Predictive Boosting DCA
 
-Building and improving data-driven Bitcoin accumulation strategies, with a focus on utilizing signal from predicion market data. 
+The goal of this project is to design a dynamic Dollar-Cost-Average strategy, which adopts long-only method, helping accumulate as much bitcoins as it could, and significantly outperforming passive uniform DCA strategy.
+While the ultimate purpose of analytics is to give predictive signals, helping not only in accumulating, but also in trading transactions, it is temping to develop a model which could ouput credible future price/return forcasts. 
 
-See [stackingsats.org](https://www.stackingsats.org/) for more information.
+In this project, I have developed two models to predict future return. One is a simple linear regression method, the other uses Mamba achietecture as basic blocks of a 4-layers deep learning model. Then the algorithms use predicted results either as signal, or as booster of uniform weights.
 
----
+**NOTE** 
 
-## The Mission: Exploring Institutional Bitcoin Accumulation
-
-As Bitcoin matures as an institutional asset, standard Dollar Cost Averaging (DCA) is a strong baseline, but there may be room for optimization. This project facilitates the design of **data-driven, long-only** accumulation strategies. The aim is to explore methods that maintain DCA’s systematic discipline while potentially **improving acquisition efficiency** within fixed budgets and time horizons.
-
-### Latest Tournament
-Trilemma Foundation hosts tournaments to find the most efficient accumulation models.
-* **Current/Recent:** [Stacking Sats Tournament - MSTR 2025](https://github.com/TrilemmaFoundation/stacking-sats-tournament-mstr-2025)
+Extra packages installations are needed to run backtest. Screen shots of backtest were saved in 'model/output_LinReg' and 'model/output_mamba' in case when readers are unwilling to install them.
 
 ---
 
-## Repository Overview
+## Backtest results
 
-This repository provides a template and framework for:
-1.  **Exploratory Data Analysis (EDA)** of Bitcoin price action and on-chain properties.
-2.  **Feature Engineering** that integrates prediction market sentiment (Polymarket), macro indicators, and on-chain metrics.
-3.  **Strategy Development** for daily purchase schedules (dynamic DCA).
-4.  **Backtesting & Evaluation** against uniform DCA benchmarks.
-
-### Repository Structure
-
-```text
-.
-├── template/                        # CORE FRAMEWORK (Start here)
-│   ├── prelude_template.py          # Data loading & Polymarket utilities
-│   ├── model_development_template.py # IMPLEMENT YOUR MODEL LOGIC HERE
-│   ├── backtest_template.py         # Evaluation engine
-│   └── *.md                         # Documentation for model logic & backtesting
-├── example_1/                       # REFERENCE IMPLEMENTATION
-│   ├── run_backtest.py              # How to run the example
-│   └── model_development_example_1.py # Example Polymarket + MVRV integration
-├── data/                            # Bitcoin & Polymarket source data
-├── output/                          # Results and visualizations
-└── tests/                           # Unit tests for core logic
-```
-
----
-
-## Getting Started
-
-### 1. Installation
-
-1.  **Clone the repository:**
+1.  **Linear Regression method**
     ```bash
-    git clone https://github.com/TrilemmaFoundation/bitcoin-analytics-capstone-template
-    cd bitcoin-analytics-capstone-template
+    python -m model.LinReg_backtest
+    ```
+    <img src='model/output_LinReg/LinReg_backtest_screenshot.png' width='1000'>
+
+    This simplest predictive method gets **50.29%** win rate, which is not very different from uniform strategy. All backtest ouputs were saved in folder 'model/output_LinReg'.
+
+2.  **Mamba based deep learning method**
+    ```bash
+    python -m model.mamba_backtest
     ```
 
-2.  **Setup environment:**
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # Windows: venv\\Scripts\\activate
-    pip install -r requirements.txt
+    <img src='model/output_mamba/mamba_backtest_screenshot.png' width='1000'>
+
+    This method outputs far more reliable signals and gets **66.45%** win rate. To further improve it, finer retraining interval and/or finding other informative signal could be viable direction. All backtest ouputs were saved in folder 'model/output_mamba'.
+
+## Extra packages installation
+
+1.  **For EDA and Linear Regress method**
+    
+    yfinance==1.1.0
+
+    ipykernel==7.1.0
+
+    statsmodels==0.14.6
+
+    scikit-learn==1.8.0
+
+    hmmlearn==0.3.3
+
+2.  **For mamba method**
+    
+    torch==2.11.0
+
+    mamba_ssm==2.3.1
+
+    Please note 'mamba_ssm' installation needs Linux system and cuda available.
+
+## Mamba Method Explaination
+
+1.  **Model Achietecture**
+    ```text
+    ├── Input projection layer           # 16 -> 256 dims
+    ├── Basic blocks * 4                 # 4 layers of repeated basic blocks
+    │   ├── Mamba                        # from mamba_ssm
+    │   ├── Dropout                      # dropout=0.1
+    │   └── LayerNorm                    # LayerNorm is helpful while BatchNorm is not    
+    ├── Average Pooling                  # lambda x: x.mean(dim=1)
+    ├── Head                             # output layer
+    │   ├── Linear                       # 256 -> 256
+    │   ├── Relu                         # regularization
+    │   ├── Dropout                      # dropout=0.1
+    └── └── Linear                       # 256 -> 4   
     ```
 
-### 2. Data Acquisition
+2.  **Features Slection & Target Horizons**
 
-The `data/` directory contains historical BTC price data and specific Polymarket datasets (Politics, Finance, Crypto).
+    ```python
+    FEATS = {
+            'tech': ['RSI', 
+                    'Mayer_multiple',
+                    'Volume'],
+            'onchain': ['price_vs_ma',
+                        'price_ma7_ma30',
+                        'price_ma30_ma90',
+                        'HashRate_ma7_ma30',
+                        'HashRate_ma30_ma90',
+                        'AdrBalCnt_ma7_ma30',
+                        'AdrBalCnt_ma30_ma90',
+                        'mvrv_zscore',
+                        'price_ma7_ma30_gradient',
+                        'price_ma30_ma90_gradient'],
+            'poly': ['btc_sentiment',
+                    'rate_up_market_count',
+                    'rate_down_market_count']
+            }
+    HORIZONS = ['return_030d',
+                'return_060d', 
+                'return_090d', 
+                'return_120d']
+    ```
+    Technical features are computed on yahoo finance dataset, which could be downloaded by 'data/yfinance/yf_download.py'. OnChain features are computed on Coinmetrics dataset, and Poly features on polymarket dataset. Targets are future returns if buy at today's price, in 4 horizons.
 
-Data can be [downloaded manually from Google Drive](https://drive.google.com/drive/folders/1gizJ_n-QCnE8qrFM-BU3J_ZpaR3HCjn7?usp=sharing) into the `data/` folder, or you can use the automated script:
+3.  **Training Data Structure & Models Periodical Coverage**
+    
+    (1) Organized x_train, x_val, and x_test:
 
-```bash
-python data/download_data.py
-```
+    For the time series dataset training task, data structure should be in a info-leakage-preventing manner, for example, the data feed into model name 'model/checkpoint/model_2018-12-31.pt' should be: (see function 'load_data' in model/mamba.py)
+    ```python
+    N = len(pd.date_range('2010-07-18','2018-12-31'))
+    n_test = max(int(N * test_ratio), 365)
+    n_val = int(N * val_ratio)
+    n_train = N - n_val - n_test
 
-**Included Data:**
-* **CoinMetrics BTC Data**: Daily OHLCV and network metrics.
-  * **Bitcoin Price Source of Truth**: The `PriceUSD` column in the CoinMetrics data is the source of truth for BTC-USD prices. This is renamed to `PriceUSD_coinmetrics` in the codebase. This is the only column you hypothetically need to build a model (along with the datetime index, of course).
-* **Polymarket Data**: High-fidelity parquet files containing trades, odds history, and market metadata.
-  * **Timestamp note**: Some parquet timestamp columns are stored with incorrect
-    units (millisecond values encoded as microseconds). Direct reads can show
-    dates near 1970. Use the built-in loaders in `template/prelude_template.py`
-    or `eda/eda_starter_template.py`, which detect and correct these values at
-    runtime.
+    X_train, Y_train = X[:n_train], Y[:n_train]
+    X_val, Y_val = X[n_train: n_train + n_val - 120], Y[n_train: n_train + n_val - 120]
+    X_test, Y_test = X[n_train + n_val:], Y[n_train + n_val:]
+    ```
+    
+    Please note that the last 365 steps data never involved in training nor in model selection. And the 120 steps before test data are masked as well since my longest target horizon is 120 days return. 
 
-**External Data:**
-External data is encouraged; students are responsible for ensuring that the data license permits all project participants to access and use (i.e., no proprietary data).
+    (2) For every test window [start_date: end_date], call relevant pretrained model to predict signal:
 
-**System Requirements:**
-Assume a modern laptop specification (think 16GB M4 Air).
+    ```text
+    end_date < 2018-12-31 --> model_2018-12-31.pt
+    end_date < 2019-06-30 --> model_2019-06-30.pt
+    end_date < 2019-12-31 --> model_2019-12-31.pt
+    ...
+    ```
+    (3) Signals are formatted as  {start_date:np.ndarray of 365 signals}, for instance:
+    ```text
+    {'2018-01-01': [365 signals]}
+    {'2018-01-02': [365 signals]}
+    ...
+    ```
+    (4) Since the signals are computed in a rolling manner, below backtest functions are revised accordingly:
+    ```text
+    backtest_template_mamba.py --> copied from backtest_template.py
+            (run_full_analysis)
+    prelude_template_mamba.py --> copied from prelude_template.py
+            (check_strategy_submission_ready, backtest_dynamic_dca, compute_cycle_spd)
+    ```
 
----
+4.  **Prediction Quality**
 
-## Model Development Guidelines
+    ```bash
+    python -m model.template_mamba
+    ```
 
-The framework includes a **Template Baseline** in `template/`. This serves as a starting point, currently implementing a simple 200-day Moving Average filter (accumulating more when price is below the MA).
+    <img src='model/output_mamba/best_model_120d.png' width='1000'>
 
-### Exploration Path: Prediction Market Integration
+    | Metrics |  30d   |  60d  |  90d  |  120d |
+    |---------|--------|-------|-------|-------|
+    | MSE | 3.2640838e-03 | 2.4250933e-04 | 1.5079099e-04 | 9.9083205e-05 |
+    | MAE | 2.4871876 | 2.7896104 | 1.9521879 | 1.036711 |
+    | Direction Accuracy | 0.57798165 | 0.72247706 | 0.71330275 | 0.90825688 |
 
-A core opportunity lies in evolving this baseline into a market-aware strategy, perhaps by leveraging **Polymarket data**.
+    The model predicts future returns based on historical features with sequence length of 128 time steps. So it is expected that the 120d horizon reports best metrics. And this design is intended since we are adopting long-only philosophy. 
 
-**Illustrative Examples:**
-*   **Election Probabilities**: You might investigate if political event probabilities correlate with BTC volatility.
-*   **Economic Indicators**: Consider checking if prediction markets for Fed rate cuts act as leading indicators.
-*   **Retail Sentiment**: Specific "Polymarket Crypto" markets could potentially serve as proxies for retail sentiment or exuberance.
+    In back-testing stage, we choose predictions on 120d horizon as signal. We set a threshold that when |signal| > 0.05, it is regarded as credible signal and be added on uniform weight as booster or negator after multiplied by 2. Statiscally, uniform DCA strategy copes well with volatile assets. Predictive signals alone could not beat uniform method. 
 
-### Running Backtests
+## Possible Further Improvements
 
-**Backtest Date Range:**
-* **Range:** `2018-01-01` to `2025-12-31` (inclusive; daily frequency; no days should be missing)
-* The backtest engine uses rolling 1-year windows starting from the start date, generating daily windows until the end date.
+1.  **Paradigm Shift Detection**
 
-**Baseline Model:**
-```bash
-python -m template.backtest_template
-```
+    Run below bash command, the custom-backtest function cares about the history Mamba method competing with Uniform strategy. The vertical dash line represent the time we periodically switch pre-trained models.
 
-**Reference Implementation (Example 1):**
-```bash
-python -m example_1.run_backtest
-```
+    ```bash
+    python -c 'from model.mamba_backtest import custom_backtest; custom_backtest()'
+    ```
 
----
+    <img src='model/output_mamba/Mamba_Vs_Unif_Battle_history_plot.png' width=1000>
 
-## Key Performance Indicators
+    It is observed that the win-loss-territory-changes happened mostly just at the time when we periodically switched models. In almost all test window which starts one day in year 2020, the proposed strategy failed . The reason of this should be investigated carefully. Two possibilities worth a try: (1) Train models more frequently, say, per month. (2) Introduce other boosters or negators.
 
-When evaluating strategies, you might consider the following metrics (which are calculated by the automated backtest engine):
+    And it is interesting to observe that this kind of paradigm shifts are quite similar to those captured by Hidden Markov Model. My model performs good in state 0 and struggles in state 1:
 
-1.  **Win Rate**: Useful for understanding consistency—how often does the strategy outperform a standard DCA over 1-year windows?
-2.  **SPD (Sats Per Dollar)**: A measure of raw efficiency—are you acquiring more bitcoin for the same capital?
-3.  **Model Score**: A composite metric that balances performance (Win Rate) with risk-adjusted returns, offering a holistic view of strategy health.
+    ```bash
+    python -c 'from model.utils import hmm_state; hmm_state()'
+    ```
 
-## Licensing
+    <img src='model/output_mamba/Hidden_Markov_State_Recognision_plot.png' width=1000>
 
-*   **Code:** This repository, including its analysis and documentation, is open-sourced under the **MIT License**.
-*   **Data:** The data provided (e.g., CoinMetrics, Polymarket) is not covered by the MIT license and retains its original licensing terms. Please refer to the respective data providers for their terms of use.
+2.  **Quantile-Layered returns of select features**
 
----
+    Some features, such as ['HashRate_ma7_ma30', 'RSI', 'mvrv_zscore', 'price_ma7_Ma30'], when fell into extreme quantiles (below 0.1 or above 0.9), are strong indicators of future return.
 
-## Contacts & Community
+    ```bash
+    python -c 'from model.utils import plot_quantile_return_density; 
+                from model.LinReg import _prepare_dataset, compute_quantile_winrate; 
+                x, y = _prepare_dataset(); 
+                lag_res, quantiles = compute_quantile_winrate(x, y); 
+                plot_quantile_return_density(lag_res, "price_ma7_ma30")'
+    ```
 
-* **App:** [stackingsats.org](https://www.stackingsats.org/)
-* **Website:** [trilemma.foundation](https://www.trilemma.foundation/)
-* **Foundation:** [Trilemma Foundation](https://github.com/TrilemmaFoundation)
+    <img src='model/output_mamba/PriceMA_Quantile_Return_Density_plot.png' width=1000>
 
+    These features could be used to construct credible booster/negator signals when they fell into extreme quantiles. And hopefully this direction will improve strategy performance further.
 
-## feature selection
-
-**Linear Regression Results for features with R2>0.10 on predicting future return**
-```bash
-python -m model.feature_selection
-```
-
+## END

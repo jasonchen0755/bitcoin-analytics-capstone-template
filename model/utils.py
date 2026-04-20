@@ -67,14 +67,16 @@ def compute_technical_metrics(window: int=14) -> pd.DataFrame:
 
     return btc.shift(1).fillna(0)
 
-def compute_ma7_ma30(series:pd.Series) -> pd.Series:
+def compute_ma_convergence(series:pd.Series, p1:int = 7, p2:int = 30) -> pd.Series:
     """
     compute reversion force which push ma7 towards ma30
     we will lag features to prevent info leak
     """
-    ma7 = series.rolling(window=7, min_periods=3).mean()
-    ma30 = series.rolling(window=30, min_periods=15).mean()
-    res = pd.Series(((ma7 / ma30) - 1).clip(-1, 1).fillna(0), name=f'{series.name}_ma7_ma30')
+    ma1 = series.rolling(window=p1, min_periods=p1 // 2).mean()
+    ma2 = series.rolling(window=p2, min_periods=p2 // 2).mean()
+    res = pd.Series(((ma1 / ma2) - 1).clip(-1, 1).fillna(0), 
+                    name=f'{series.name}_ma{p1}_ma{p2}',
+                    index=series.index)
     
     return res.shift(1).fillna(0)
 
@@ -93,15 +95,26 @@ def compute_onchain_features():
 
     # function 'compute_ma7_ma30' lags output by 1 day, align with above results
     coinmetrics = coinmetrics[['HashRate', 'TxTfrCnt', 'AdrBalCnt', 'FeeTotNtv', 'PriceUSD_coinmetrics']]
-    onchain_features['HashRate_ma7_ma30'] = compute_ma7_ma30(coinmetrics['HashRate']).loc[onchain_features.index]
-    onchain_features['TxTfrCnt_ma7_ma30'] = compute_ma7_ma30(coinmetrics['TxTfrCnt']).loc[onchain_features.index]
-    onchain_features['AdrBalCnt_ma7_ma30'] = compute_ma7_ma30(coinmetrics['AdrBalCnt']).loc[onchain_features.index]
-    onchain_features['FeeTotNtv_ma7_ma30'] = compute_ma7_ma30(coinmetrics['FeeTotNtv']).loc[onchain_features.index]
-    onchain_features['price_ma7_ma30'] = compute_ma7_ma30(coinmetrics['PriceUSD_coinmetrics']).loc[onchain_features.index]
+    onchain_features['HashRate_ma7_ma30'] = compute_ma_convergence(coinmetrics['HashRate']).loc[onchain_features.index]
+    onchain_features['TxTfrCnt_ma7_ma30'] = compute_ma_convergence(coinmetrics['TxTfrCnt']).loc[onchain_features.index]
+    onchain_features['AdrBalCnt_ma7_ma30'] = compute_ma_convergence(coinmetrics['AdrBalCnt']).loc[onchain_features.index]
+    onchain_features['FeeTotNtv_ma7_ma30'] = compute_ma_convergence(coinmetrics['FeeTotNtv']).loc[onchain_features.index]
+    onchain_features['price_ma7_ma30'] = compute_ma_convergence(coinmetrics['PriceUSD_coinmetrics']).loc[onchain_features.index]
     onchain_features['price_ma7_ma30_gradient'] = onchain_features['price_ma7_ma30'].diff(1).fillna(0)
     onchain_features['price_ma7_ma30_acceleration'] = onchain_features['price_ma7_ma30_gradient'].diff(1).fillna(0)
     onchain_features['price_gradient'] = onchain_features['PriceUSD_coinmetrics'].diff(1).fillna(0)
     onchain_features['price_acceleration'] = onchain_features['price_gradient'].diff(0).fillna(0)
+
+    onchain_features['AdrBalCnt_ma30_ma90'] = compute_ma_convergence(coinmetrics['AdrBalCnt'],
+                                                                     p1=30,
+                                                                     p2=90).loc[onchain_features.index]
+    onchain_features['HashRate_ma30_ma90'] = compute_ma_convergence(coinmetrics['HashRate'],
+                                                                    p1=30,
+                                                                    p2=90).loc[onchain_features.index]
+    onchain_features['price_ma30_ma90'] = compute_ma_convergence(coinmetrics['PriceUSD_coinmetrics'],
+                                                                 p1=30,
+                                                                 p2=90).loc[coinmetrics.index]
+    onchain_features['price_ma30_ma90_gradient'] = onchain_features['price_ma30_ma90'].diff(1).fillna(0)
 
     onchain_features.drop(['PriceUSD_coinmetrics', 'price_ma'], axis=1, inplace=True)
 
@@ -171,7 +184,7 @@ def compute_polymarket_features():
 
 def compute_btc_returns():
     """
-    compute BTC 1, 7, 14, 30, 60, 90, 182, 365 days return
+    compute BTC 1, 7, 14, 30, 60, 90, 120, 182, 365 days return
     """
     from template.prelude_template import load_data
     btc = load_data()
@@ -185,6 +198,7 @@ def compute_btc_returns():
         'return_030d': price.pct_change(periods=30, fill_method=None).fillna(0),
         'return_060d': price.pct_change(periods=60, fill_method=None).fillna(0),
         'return_090d': price.pct_change(periods=90, fill_method=None).fillna(0),
+        'return_120d': price.pct_change(periods=120, fill_method=None).fillna(0),
         'return_182d': price.pct_change(periods=182, fill_method=None).fillna(0),
         'return_365d': price.pct_change(periods=365, fill_method=None).fillna(0)
     }, index = price.index).sort_index()
@@ -242,4 +256,42 @@ def plot_quantile_return_density(lag_res, feature):
 
     plt.show()
     
+import hmmlearn
+from template.prelude_template import load_data
+from sklearn.preprocessing import StandardScaler
+from hmmlearn import hmm
 
+def hmm_state():
+    btc = load_data().loc['2018-01-01':'2025-12-31']
+    btc = btc.rename(columns={'PriceUSD_coinmetrics': 'Close'})
+    btc['log_return'] = np.log(btc['Close'] / btc['Close'].shift(1))
+    btc = btc[['Close', 'log_return']].dropna()
+    returns = np.array(btc['log_return'].values).reshape(-1,1)
+
+    scaler = StandardScaler()
+    returns_scaled = scaler.fit_transform(returns)
+
+    n_states = 2
+    model = hmm.GaussianHMM(n_components=n_states,
+                            covariance_type='diag',
+                            n_iter=1000,
+                            random_state=42)
+    model.fit(returns_scaled)
+
+    btc['state'] = model.predict(returns_scaled)
+
+    plt.figure(figsize=(14,6))
+    plt.plot(btc.index, btc['log_return'], color='gray', alpha=0.5)
+    colors = ['green', 'red', 'blue']
+    for state in range(n_states):
+        mask = btc['state'] == state
+        plt.fill_between(btc.index, 
+                         btc['log_return'].min(), 
+                         btc['log_return'].max(),
+                         where = mask,
+                         color=colors[state],
+                         alpha=0.1,
+                         label=f'State {state}')
+    plt.legend()
+    plt.title('Hidden Markov State Recognision')
+    plt.show()

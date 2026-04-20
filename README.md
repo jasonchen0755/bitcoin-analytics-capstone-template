@@ -17,7 +17,7 @@ Extra packages installations are needed to run backtest. Screen shots of backtes
     ```bash
     python -m model.LinReg_backtest
     ```
-    <img src='https://github.com/jasonchen0755/bitcoin-analytics-capstone-template/tree/main/model/output_LinReg/LinReg_backtest_screenshot.png' width='1000'>
+    <img src='model/output_LinReg/LinReg_backtest_screenshot.png' width='1000'>
 
     This simplest predictive method gets **50.29%** win rate, which is not very different from uniform strategy. All backtest ouputs were saved in folder 'model/output_LinReg'.
 
@@ -26,7 +26,7 @@ Extra packages installations are needed to run backtest. Screen shots of backtes
     python -m model.mamba_backtest
     ```
 
-    <img src='https://github.com/jasonchen0755/bitcoin-analytics-capstone-template/tree/main/model/output_mamba/mamba_backtest_screenshot.png' width='1000'>
+    <img src='model/output_mamba/mamba_backtest_screenshot.png' width='1000'>
 
     This method outputs far more reliable signals and gets **66.45%** win rate. To further improve it, finer retraining interval and/or finding other informative signal could be viable direction. All backtest ouputs were saved in folder 'model/output_mamba'.
 
@@ -143,7 +143,7 @@ Extra packages installations are needed to run backtest. Screen shots of backtes
     python -m model.template_mamba
     ```
 
-    <img src='https://github.com/jasonchen0755/bitcoin-analytics-capstone-template/tree/main/model/output_mamba/best_model_120d.png' width='1000'>
+    <img src='model/output_mamba/best_model_120d.png' width='1000'>
 
     | Metrics |  30d   |  60d  |  90d  |  120d |
     |---------|--------|-------|-------|-------|
@@ -165,7 +165,7 @@ Extra packages installations are needed to run backtest. Screen shots of backtes
     python -c 'from model.mamba_backtest import custom_backtest; custom_backtest()'
     ```
 
-    <img src='https://github.com/jasonchen0755/bitcoin-analytics-capstone-template/tree/main/model/output_mamba/Mamba_Vs_Unif_Battle_history_plot.png' width=1000>
+    <img src='model/output_mamba/Mamba_Vs_Unif_Battle_history_plot.png' width=1000>
 
     It is observed that the win-loss-territory-changes happened mostly just at the time when we periodically switched models. In almost all test window which starts one day in year 2020, the proposed strategy failed . The reason of this should be investigated carefully. Two possibilities worth a try: (1) Train models more frequently, say, per month. (2) Introduce other boosters or negators.
 
@@ -175,7 +175,7 @@ Extra packages installations are needed to run backtest. Screen shots of backtes
     python -c 'from model.utils import hmm_state; hmm_state()'
     ```
 
-    <img src='https://github.com/jasonchen0755/bitcoin-analytics-capstone-template/tree/main/model/output_mamba/Hidden_Markov_State_Recognision_plot.png' width=1000>
+    <img src='model/output_mamba/Hidden_Markov_State_Recognision_plot.png' width=1000>
 
 2.  **Quantile-Layered returns of select features**
 
@@ -189,7 +189,7 @@ Extra packages installations are needed to run backtest. Screen shots of backtes
                 plot_quantile_return_density(lag_res, "price_ma7_ma30")'
     ```
 
-    <img src='https://github.com/jasonchen0755/bitcoin-analytics-capstone-template/tree/main/model/output_mamba/PriceMA_Quantile_Return_Density_plot.png' width=1000>
+    <img src='model/output_mamba/PriceMA_Quantile_Return_Density_plot.png' width=1000>
 
     These features could be used to construct credible booster/negator signals when they fell into extreme quantiles. And hopefully this direction will improve strategy performance further.
 

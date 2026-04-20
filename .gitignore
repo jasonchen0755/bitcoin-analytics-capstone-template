@@ -215,8 +215,8 @@ tmp_capstone_data/
 *.log
 
 *.parquet
-*.csv
-*.png  
+#*.csv
+#*.png  
 *.jpg
 *.jpeg
 *.gif

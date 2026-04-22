@@ -295,3 +295,34 @@ def hmm_state():
     plt.legend()
     plt.title('Hidden Markov State Recognision')
     plt.show()
+
+def plot_extreme_quantile_return(features, 
+                                 quantiles, 
+                                 btc_returns, 
+                                 start, 
+                                 end,
+                                 feature_name,
+                                 horizons = ['007d', '014d', '030d', '060d', '090d', '120d']):
+    features = features.loc[start: end]
+    btc_returns = btc_returns.loc[start: end]
+    horizons = [f'return_{h}' for h in horizons]
+
+    xticks = pd.date_range(start, end)
+    y_feat = features[feature_name]
+    q1 = quantiles.loc[0.1, feature_name].loc[start:end]
+    q9 = quantiles.loc[0.9, feature_name].loc[start:end]
+
+    fig, ax = plt.subplots(2,3,figsize=(20,20))
+    coordinates = [(i, j) for j in range(3) for i in range(2)]
+    k = 0
+    for h in horizons:
+        i, j = coordinates[k]
+        ax[i][j].plot(xticks, y_feat, label=feature_name)
+        ax[i][j].plot(xticks, q1, label='10% quantile')
+        ax[i][j].plot(xticks, q9, label='90% quantile')
+        ax[i][j].plot(xticks, btc_returns[h], label=h)
+        ax[i][j].set_title(f'{feature_name} quantile Vs return')
+        ax[i][j].legend()
+        k += 1
+
+    plt.show()

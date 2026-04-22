@@ -7,7 +7,7 @@ In this project, I have developed two models to predict future return. One is a 
 
 **NOTE** 
 
-Extra packages installations are needed to run backtest. Screen shots of backtest were saved in 'model/output_LinReg' and 'model/output_mamba' in case when readers are unwilling to install them.
+Extra packages installations are needed to run backtests (see requirements.txt). The mamba-ssm installation is tedious and time consuming. Screen shots of backtests were saved in 'model/output_LinReg', 'model/output_mamba', and 'model/output_final' in case when readers are unwilling to install them.
 
 ---
 
@@ -17,7 +17,7 @@ Extra packages installations are needed to run backtest. Screen shots of backtes
     ```bash
     python -m model.LinReg_backtest
     ```
-    <img src='model/output_LinReg/LinReg_backtest_screenshot.png' width='800'>
+    <img src='model/output_LinReg/LinReg_backtest_screenshot.png' width='600'>
 
     This simplest predictive method gets **50.29%** win rate, which is not very different from uniform strategy. All backtest ouputs were saved in folder 'model/output_LinReg'.
 
@@ -26,11 +26,43 @@ Extra packages installations are needed to run backtest. Screen shots of backtes
     python -m model.mamba_backtest
     ```
 
-    <img src='model/output_mamba/mamba_backtest_screenshot.png' width='800'>
+    <img src='model/output_mamba/mamba_backtest_screenshot.png' width='600'>
 
     This method outputs far more reliable signals and gets **66.45%** win rate. To further improve it, finer retraining interval and/or finding other informative signal could be viable direction. All backtest ouputs were saved in folder 'model/output_mamba'.
 
-## Extra packages installation
+    Mamaba achietecture is good on time series tasks. It is a State-Space model introduced by Albert Gu et.al. in 2024. [MAMBA SSM Achitecture] (https://github.com/state-spaces/mamba)
+
+3.  **Final Combination**
+    ```bash
+    python -m model.final_model_backtest
+    ```
+
+    <img src='model/output_final/performance_comparison.svg' width=800>
+
+    The final model starts from signals learned by mamba method, then introduces 30d returns' rolling standard deviation and Mayer-multiple as metrics to identify paradigm shift. When paradigm seems shifted, the model amplifies signals if RSI and HarshRate fell in extreme quantile. The final model prevails Uniform strategy with **73.84%** win rate.
+
+    ```python
+    # (1) Rolling sd: Here we use 3 days rolling standard deviation of 30 days return, which may capture short term volatility. 
+    res_std_030d = res['return_030d'].rolling(3).std().bfill().shift(1)
+
+    # (2) Mayer multiple: It is the ratio of current Bitcoin price by its 200-day moving average, represents long term reversion force.
+    sma_200 = close.rolling(window=200).mean()
+    Mayer_multiple = close / sma_200  
+
+    # (3) RSI: The Relative Strength Index is constructed on daily gains and losses. It is a momentum oscillator that measures the speed and magnitude of price movements to identify overbought or oversold conditions in a market.
+    delta = close.diff(1)
+    gain = delta.clip(lower=0).ewm(alpha=1/14, adjust=False).mean()
+    loss = -delta.clip(upper=0).ewm(alpha=1/14, adjust=False).mean()
+    rsi = gain / loss
+    RSI = 100 - (100 / (1+rsi))
+    
+    # (4) HashRate 
+    ma7 = HashRate.rolling(7, 3).mean()
+    ma30 = HashRate.rolling(30, 15).mean()
+    HashRate_ma7_ma30 = (ma7/ma30 - 1).clip(-1, 1)
+    ```
+
+## Extra packages installation & Function Dependency
 
 1.  **For EDA and Linear Regress method**
     
@@ -51,6 +83,25 @@ Extra packages installations are needed to run backtest. Screen shots of backtes
     mamba_ssm==2.3.1
 
     Please note 'mamba_ssm' installation needs Linux system and cuda available.
+
+3.  **Functions Dependency**
+
+    ```text
+    Linear Regression method:
+        model/LinReg_backtest.py
+        model/LinReg.py
+        template/prelude_template.py
+        templat/backtest_template.py
+    Mamba method:
+        model/mamba_backtest.py
+        model/mamba.py
+        model/prelude_template_mamba.py     # copied from template/prelude_template.py
+        model/backtest_template_mamba.py    # copied from template/backtest_template.py
+    Final model:
+        model/final_model_backtest.py
+        model/final_model_prelude_template.py   # copied from model/prelude_template_mamba.py
+        model/final_model_backtest_template.py  # copied from model/backtest_template_mamba.py
+    ```
 
 ## Mamba Method Explaination
 
@@ -155,7 +206,7 @@ Extra packages installations are needed to run backtest. Screen shots of backtes
 
     In back-testing stage, we choose predictions on 120d horizon as signal. We set a threshold that when |signal| > 0.05, it is regarded as credible signal and be added on uniform weight as booster or negator after multiplied by 2. Statiscally, uniform DCA strategy copes well with volatile assets. Predictive signals alone could not beat uniform method. 
 
-## Possible Further Improvements
+## Combination and Improvements
 
 1.  **Paradigm Shift Detection**
 
@@ -167,7 +218,7 @@ Extra packages installations are needed to run backtest. Screen shots of backtes
 
     <img src='model/output_mamba/Mamba_Vs_Unif_Battle_history_plot.png' width=1000>
 
-    It is observed that the win-loss-territory-changes happened mostly just at the time when we periodically switched models. In almost all test window which starts one day in year 2020, the proposed strategy failed . The reason of this should be investigated carefully. Two possibilities worth a try: (1) Train models more frequently, say, per month. (2) Introduce other boosters or negators.
+    It is observed that the win-loss-territory changes mostly just at the time when we periodically switched models. In almost all test window which starts one day in year 2020, the proposed strategy failed . The reason of this should be investigated carefully. Two possibilities worth a try: (1) Train models more frequently, say, per month. (2) Introduce other boosters or negators.
 
     And it is interesting to observe that this kind of paradigm shifts are quite similar to those captured by Hidden Markov Model. My model performs good in state 0 and struggles in state 1:
 
@@ -176,6 +227,7 @@ Extra packages installations are needed to run backtest. Screen shots of backtes
     ```
 
     <img src='model/output_mamba/Hidden_Markov_State_Recognision_plot.png' width=1000>
+
 
 2.  **Quantile-Layered returns of select features**
 
@@ -186,11 +238,17 @@ Extra packages installations are needed to run backtest. Screen shots of backtes
                 from model.LinReg import _prepare_dataset, compute_quantile_winrate; 
                 x, y = _prepare_dataset(); 
                 lag_res, quantiles = compute_quantile_winrate(x, y); 
-                plot_quantile_return_density(lag_res, "price_ma7_ma30")'
+                plot_quantile_return_density(lag_res, "HashRate_ma7_ma30")'
     ```
 
-    <img src='model/output_mamba/PriceMA_Quantile_Return_Density_plot.png' width=1000>
+    <img src='model/output_mamba/HashRate_Quantile_Return_Density_plot.png' width=1000>
 
     These features could be used to construct credible booster/negator signals when they fell into extreme quantiles. And hopefully this direction will improve strategy performance further.
+
+3.  **Improvements**
+
+    Two metrics, standard deviation of 30 days return, along with Mayer-multiple, are helpful to detect paradigm shift. And two other metric, HashRate_ma7_ma30 and RSI, amplify signals when they fell below 10% or above 90% quantiles.
+
+    <img src='model/output_final/cumulative_performance.svg' width=600>
 
 ## END

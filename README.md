@@ -3,11 +3,11 @@
 The goal of this project is to design a dynamic Dollar-Cost-Average strategy, which adopts long-only method, helping accumulate as much bitcoins as it could, and significantly outperforming passive uniform DCA strategy.
 While the ultimate purpose of analytics is to give predictive signals, helping not only in accumulating, but also in trading transactions, it is temping to develop a model which could ouput credible future price/return forcasts. 
 
-In this project, I have developed two models to predict future return. One is a simple linear regression method, the other uses Mamba achietecture as basic blocks of a 4-layers deep learning model. Then the algorithms use predicted results either as signal, or as booster of uniform weights. The final model combined metrics used in the two models. Specifically, the signals first boosted by Mamba prediction, then amplified by technical and on-chain metrics which are helpful to detect paradigm shift. The final model wins **73.84%** of the test windows over unfiform strategy.
+In this project, I have developed two models to predict future return. One is a simple linear regression method, the other uses Mamba achietecture as basic blocks of a 4-layers deep learning model. Then the algorithms use predicted results either as signal, or as booster of uniform weights. The final model combined metrics used in the two models. Specifically, the signals first boosted by Mamba prediction, then amplified by technical and on-chain metrics which are helpful to detect paradigm shift. The final model wins **73.84%** of the test windows over uniform strategy.
 
 **NOTE** 
 
-Extra packages installations are needed to run backtests (see requirements.txt). The mamba-ssm installation is tedious and time consuming. Screen shots of backtests were saved in 'model/output_LinReg', 'model/output_mamba', and 'model/output_final' in case when readers are unwilling to install them.
+Extra packages are needed to run backtests (see requirements.txt). The mamba-ssm installation is tedious and time consuming. Screen shots of backtests were saved in 'model/output_LinReg', 'model/output_mamba', and 'model/output_final' in case when readers are unwilling to install them.
 
 ---
 
@@ -28,7 +28,7 @@ Extra packages installations are needed to run backtests (see requirements.txt).
 
     <img src='model/output_mamba/mamba_backtest_screenshot.png' width='600'>
 
-    This method outputs far more reliable signals and gets **66.45%** win rate. To further improve it, finer retraining interval and/or finding other informative signal could be viable direction. All backtest ouputs were saved in folder 'model/output_mamba'.
+    This method outputs far more reliable signals and gets **66.45%** win rate. To further improve it, finer retraining interval and/or finding other informative signals could be viable directions. All backtest ouputs were saved in folder 'model/output_mamba'.
 
     Mamaba achietecture is good on time series tasks. It is a State-Space model introduced by Albert Gu et.al. in 2024. [MAMBA SSM Achitecture] (https://github.com/state-spaces/mamba)
 
@@ -39,30 +39,34 @@ Extra packages installations are needed to run backtests (see requirements.txt).
 
     <img src='model/output_final/performance_comparison.svg' width=800>
 
-    The final model starts from signals learned by mamba method, then introduces 30d returns' rolling standard deviation and Mayer-multiple as metrics to identify paradigm shift. When paradigm seems shifted, the model amplifies signals if RSI and HarshRate fell in extreme quantile. The final model prevails Uniform strategy with **73.84%** win rate.
+    The final model starts from signals learned by mamba method, then introduces 30d returns' rolling standard deviation and Mayer-multiple as metrics to identify paradigm shift. When paradigm seems shifted, the model amplifies signals if RSI and HarshRate fell in extreme quantiles. The final model prevails Uniform strategy with **73.84%** win rate.
 
     ```python
-    # (1) Rolling sd: Here we use 3 days rolling standard deviation of 30 days return, which may capture short term volatility. 
+    # (1) Rolling sd: Here we use 3 days rolling standard deviation of 
+    #       30 days return, which may capture short term volatility. 
     res_std_030d = res['return_030d'].rolling(3).std().bfill().shift(1)
 
-    # (2) Mayer multiple: It is the ratio of current Bitcoin price by its 200-day moving average, represents long term reversion force.
+    # (2) Mayer multiple: It is the ratio of current Bitcoin price by 
+    #       its 200-day moving average, represents long term reversion force.
     sma_200 = close.rolling(window=200).mean()
     Mayer_multiple = close / sma_200  
 
-    # (3) RSI: The Relative Strength Index is constructed on daily gains and losses. It is a momentum oscillator that measures the speed and magnitude of price movements to identify overbought or oversold conditions in a market.
+    # (3) RSI: The Relative Strength Index is constructed on daily gains 
+    #   and losses. It is a momentum oscillator that measures the speed 
+    #   and magnitude of price movements to identify overbought or oversold.
     delta = close.diff(1)
     gain = delta.clip(lower=0).ewm(alpha=1/14, adjust=False).mean()
     loss = -delta.clip(upper=0).ewm(alpha=1/14, adjust=False).mean()
     rsi = gain / loss
     RSI = 100 - (100 / (1+rsi))
     
-    # (4) HashRate 
+    # (4) HashRate: we care about the distance of ma7 to ma30. 
     ma7 = HashRate.rolling(7, 3).mean()
     ma30 = HashRate.rolling(30, 15).mean()
     HashRate_ma7_ma30 = (ma7/ma30 - 1).clip(-1, 1)
     ```
 
-## Extra packages installation & Function Dependency
+## Extra packages & Function Dependency
 
 1.  **For EDA and Linear Regress method**
     
@@ -152,7 +156,7 @@ Extra packages installations are needed to run backtests (see requirements.txt).
     
     (1) Organized x_train, x_val, and x_test:
 
-    For the time series dataset training task, data structure should be in a info-leakage-preventing manner, for example, the data feed into model name 'model/checkpoint/model_2018-12-31.pt' should be: (see function 'load_data' in model/mamba.py)
+    For the time series dataset task, data structure should be in a info-leakage-preventing manner, for example, the data feed into model name 'model/checkpoint/model_2018-12-31.pt' should be: (see function 'load_data' in model/mamba.py)
     ```python
     N = len(pd.date_range('2010-07-18','2018-12-31'))
     n_test = max(int(N * test_ratio), 365)
@@ -210,7 +214,7 @@ Extra packages installations are needed to run backtests (see requirements.txt).
 
 1.  **Paradigm Shift Detection**
 
-    Run below bash command, the custom-backtest function cares about the history Mamba method competing with Uniform strategy. The vertical dash line represent the time we periodically switch pre-trained models. Green bars means our strategy is wining, red bars means uniform strategy beat us, and some sparse orange dots alone horizontal zero line are ties.
+    Run below bash command, the custom-backtest function cares about the history Mamba method competing with Uniform strategy. The vertical dash line represent the time we periodically switch pre-trained models. Green bars indicate our strategy is wining, red bars are test windows when uniform strategy beat us, and some sparse orange dots alone horizontal zero line are ties.
 
     ```bash
     python -c 'from model.mamba_backtest import custom_backtest; custom_backtest()'
@@ -218,9 +222,9 @@ Extra packages installations are needed to run backtests (see requirements.txt).
 
     <img src='model/output_mamba/Mamba_Vs_Unif_Battle_history_plot.png' width=800>
 
-    It is observed that the win-loss-territory changes mostly just at the time when we periodically switched models. In almost all test window which starts one day in year 2020, the proposed strategy failed . The reason of this should be investigated carefully. Two possibilities worth a try: (1) Train models more frequently, say, per month. (2) Introduce other boosters or negators.
+    It is observed that the win-loss-territory changes are mostly near the time when we periodically switched models. In almost all test windows which start from one day in year 2020, the proposed strategy failed. The reason should be investigated carefully. Two possibilities worth try: (1) Train models more frequently, say, per month. (2) Introduce other boosters or negators.
 
-    And it is interesting to observe that this kind of paradigm shifts are quite similar to those captured by Hidden Markov Model. My model performs good in state 0 and struggles in state 1:
+    And it is interesting to observe that this kind of paradigm shifts are quite similar to those captured by Hidden Markov Model. The model performs good in state 0 and struggles in state 1:
 
     ```bash
     python -c 'from model.utils import hmm_state; hmm_state()'

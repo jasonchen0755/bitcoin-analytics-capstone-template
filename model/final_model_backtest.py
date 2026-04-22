@@ -265,17 +265,17 @@ def post_process_signal(_Signal,
 
         if mamba_signals is not None:
             mamba_signal_window = mamba_signals[day.strftime('%Y-%m-%d')]
-            signals = ((np.abs(mamba_signal_window) >= 0.05) * mamba_signal_window * 200 + 1) * base_weight
+            signals = ((np.abs(mamba_signal_window) >= 0.8 * res_std_030d.loc[day]) * mamba_signal_window * 200 + 1) * base_weight
             signals = np.clip(signals, a_min=0, a_max=15)
 
-        if res_std_030d.loc[day] >= 0.025 and x.loc[day, 'Mayer_multiple'] <= 1.3:        
+        if x.loc[day, 'Mayer_multiple'] <= 1.2:  #res_std_030d.loc[day] >= 0.025 and       
             q1_hashrate = -.01 * (features.loc[day:window_end, 'HashRate_ma7_ma30'].values <= q_hashrate.loc[qa, day:window_end].values)
-            q9_hashrate = .05 * (features.loc[day:window_end, 'HashRate_ma7_ma30'].values >= q_hashrate.loc[qb, day:window_end].values)
+            q9_hashrate = 30 * (features.loc[day:window_end, 'HashRate_ma7_ma30'].values >= q_hashrate.loc[qb, day:window_end].values)
 
-            q1_rsi = -.01 * (features.loc[day:window_end, 'RSI'].values <= q_rsi.loc[qa, day:window_end].values)
-            q9_rsi = .05 * (features.loc[day:window_end, 'RSI'].values >= q_rsi.loc[qb, day:window_end].values)
+            # q1_rsi = -.01 * (features.loc[day:window_end, 'RSI'].values <= q_rsi.loc[qa, day:window_end].values)
+            q9_rsi = 30 * (features.loc[day:window_end, 'RSI'].values >= q_rsi.loc[qb, day:window_end].values)
 
-            signals = signals + q9_rsi + q1_rsi + q9_hashrate + q1_hashrate 
+            signals = signals + q9_rsi + q9_hashrate + q1_hashrate # + q1_rsi
             signals = np.clip(signals, a_min=0, a_max=15) 
 
         signals = allocate_sequential_stable(signals, len(signals))
@@ -340,4 +340,70 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+def fast_backtest(start='2018-01-01',
+                  end='2025-12-31',
+                  qa=0.1,
+                  qb=0.9):
+    
+    from model.LinReg import _prepare_dataset
+    from model.utils import compute_btc_returns
+    x, y = _prepare_dataset()
+    _, quantiles = compute_quantile_winrate(x, y)
+    res = compute_btc_returns()
+    res_std_030d = res['return_030d'].rolling(3).std().bfill().shift(1).loc['2018-01-01':]
+    price = res['price']
+
+    features = x.loc[start: end].copy() # type: ignore    
+    q_hashrate = quantiles.loc[[qa,qb], 'HashRate_ma7_ma30']
+    q_rsi = quantiles.loc[[qa,qb], 'RSI']
+
+    with open ('data/dca/mamba_signals.json', 'r') as f:  
+        mamba_signals = json.load(f)
+
+    base_weight = np.ones(365) / 365
+    window_start = pd.date_range('2018-01-01', '2024-12-31')
+    
+    win, history = 0, []
+    pbar = tqdm(range(len(window_start)), desc='Post Processing Signals...')
+    for idx, d in enumerate(pbar):
+        day = window_start[idx]
+        window_end = day + pd.offsets.DateOffset(364)
+
+        signals = base_weight.copy()
+
+        mamba_signal_window = mamba_signals[day.strftime('%Y-%m-%d')]
+        signals = ((np.abs(mamba_signal_window) >= 0.8 * res_std_030d.loc[day]) * mamba_signal_window * 200 + 1) * base_weight
+        signals = np.clip(signals, a_min=0, a_max=15)
+
+        if x.loc[day, 'Mayer_multiple'] <= 1.2:   #res_std_030d.loc[day] >= 0.0005 and      
+            q1_hashrate = -.1 * (features.loc[day:window_end, 'HashRate_ma7_ma30'].values <= q_hashrate.loc[qa, day:window_end].values)
+            q9_hashrate = 30* (features.loc[day:window_end, 'HashRate_ma7_ma30'].values >= q_hashrate.loc[qb, day:window_end].values)
+
+            # q1_rsi = -.01 * (features.loc[day:window_end, 'RSI'].values <= q_rsi.loc[qa, day:window_end].values)
+            q9_rsi = 30 * (features.loc[day:window_end, 'RSI'].values >= q_rsi.loc[qb, day:window_end].values)
+
+            signals = signals + q9_rsi + q9_hashrate + q1_hashrate # + q1_rsi
+            signals = np.clip(signals, a_min=0, a_max=15) 
+
+        signals = allocate_sequential_stable(signals, len(signals))
+
+        model_collection = (1e6 * signals / price.loc[day:window_end]).sum()
+        uniform_collection = (1e6 * base_weight / price.loc[day:window_end]).sum()
+
+        if model_collection > uniform_collection:
+            win += 1
+        history.append([model_collection, uniform_collection])
+
+        pbar.set_description(f'{win}/{idx+1}, model:{model_collection}, uniform:{uniform_collection}')
+
+    history = np.array(history)
+    print(f'surplus:{history[:,0].sum()- history[:,1].sum()}')
+    plt.fill_between(window_start, 0, (history[:,0]-history[:,1]).cumsum())
+    plt.title('cumulated surplus')
+    plt.show()
+    
+
+
 

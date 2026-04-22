@@ -3,7 +3,7 @@
 The goal of this project is to design a dynamic Dollar-Cost-Average strategy, which adopts long-only method, helping accumulate as much bitcoins as it could, and significantly outperforming passive uniform DCA strategy.
 While the ultimate purpose of analytics is to give predictive signals, helping not only in accumulating, but also in trading transactions, it is temping to develop a model which could ouput credible future price/return forcasts. 
 
-In this project, I have developed two models to predict future return. One is a simple linear regression method, the other uses Mamba achietecture as basic blocks of a 4-layers deep learning model. Then the algorithms use predicted results either as signal, or as booster of uniform weights.
+In this project, I have developed two models to predict future return. One is a simple linear regression method, the other uses Mamba achietecture as basic blocks of a 4-layers deep learning model. Then the algorithms use predicted results either as signal, or as booster of uniform weights. The final model combined metrics used in the two models. Specifically, the signals first boosted by Mamba prediction, then amplified by technical and on-chain metrics which are helpful to detect paradigm shift. The final model wins **73.84%** of the test windows over unfiform strategy.
 
 **NOTE** 
 
@@ -194,7 +194,7 @@ Extra packages installations are needed to run backtests (see requirements.txt).
     python -m model.template_mamba
     ```
 
-    <img src='model/output_mamba/best_model_120d.png' width='1000'>
+    <img src='model/output_mamba/best_model_120d.png' width='800'>
 
     | Metrics |  30d   |  60d  |  90d  |  120d |
     |---------|--------|-------|-------|-------|
@@ -216,7 +216,7 @@ Extra packages installations are needed to run backtests (see requirements.txt).
     python -c 'from model.mamba_backtest import custom_backtest; custom_backtest()'
     ```
 
-    <img src='model/output_mamba/Mamba_Vs_Unif_Battle_history_plot.png' width=1000>
+    <img src='model/output_mamba/Mamba_Vs_Unif_Battle_history_plot.png' width=800>
 
     It is observed that the win-loss-territory changes mostly just at the time when we periodically switched models. In almost all test window which starts one day in year 2020, the proposed strategy failed . The reason of this should be investigated carefully. Two possibilities worth a try: (1) Train models more frequently, say, per month. (2) Introduce other boosters or negators.
 
@@ -226,7 +226,7 @@ Extra packages installations are needed to run backtests (see requirements.txt).
     python -c 'from model.utils import hmm_state; hmm_state()'
     ```
 
-    <img src='model/output_mamba/Hidden_Markov_State_Recognision_plot.png' width=1000>
+    <img src='model/output_mamba/Hidden_Markov_State_Recognision_plot.png' width=800>
 
 
 2.  **Quantile-Layered returns of select features**
@@ -241,14 +241,14 @@ Extra packages installations are needed to run backtests (see requirements.txt).
                 plot_quantile_return_density(lag_res, "HashRate_ma7_ma30")'
     ```
 
-    <img src='model/output_mamba/HashRate_Quantile_Return_Density_plot.png' width=1000>
+    <img src='model/output_mamba/HashRate_Quantile_Return_Density_plot.png' width=800>
 
     These features could be used to construct credible booster/negator signals when they fell into extreme quantiles. And hopefully this direction will improve strategy performance further.
 
 3.  **Improvements**
 
-    Two metrics, standard deviation of 30 days return, along with Mayer-multiple, are helpful to detect paradigm shift. And two other metric, HashRate_ma7_ma30 and RSI, amplify signals when they fell below 10% or above 90% quantiles.
+    Two metrics, **standard deviation of 30 days return**, along with **Mayer-multiple**, are helpful to detect paradigm shift. And two other metric, **HashRate_ma7_ma30** and **RSI**, are used to amplify signals when the value of them fell in below 10% or above 90% quantiles. This simple maniplation raises win rate from **66.45%** to **73.84%**, and gets meaningful surplus over uniform strategy.
 
-    <img src='model/output_final/cumulative_performance.svg' width=600>
+    <img src='model/output_final/cumulative_performance.svg' width=800>
 
 ## END

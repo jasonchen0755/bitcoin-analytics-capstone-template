@@ -251,7 +251,7 @@ Extra packages are needed to run backtests (see requirements.txt). The mamba-ssm
 
 3.  **Improvements**
 
-    Two metrics, **standard deviation of 30 days return**, along with **Mayer-multiple**, are helpful to detect paradigm shift. And two other metric, **HashRate_ma7_ma30** and **RSI**, are used to amplify signals when the value of them fell in below 10% or above 90% quantiles. This simple maniplation raises win rate from **66.45%** to **71.84%**, and gets meaningful surplus over uniform strategy.
+    Two metrics, **standard deviation of 30 days return**, along with **Mayer-multiple**, are helpful to detect paradigm shift. And two other metric, **HashRate_ma7_ma30** and **RSI**, are used to amplify signals when the value of them fell in below 10% or above 90% quantiles. This simple maniplation raises win rate from **66.45%** to **70.20%**, and gets meaningful surplus over uniform strategy.
 
     <img src='model/output_final/cumulative_performance.svg' width=800>
 

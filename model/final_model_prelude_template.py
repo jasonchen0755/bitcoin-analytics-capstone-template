@@ -279,10 +279,11 @@ def compute_cycle_spd(
 
     if signal_dict is None:
         import os, json
-        if os.path.exists('data/final_model_signal.json'):
-            with open ('data/dca/final_model_signal.json', 'r') as f:
+        if os.path.exists('data/dca/final_model_signals.json'):
+            with open ('data/dca/final_model_signals.json', 'r') as f:
                 signal_dict = json.load(f)
         else:
+            print('not exists!')
             from model.final_model_backtest import compute_signal, post_process_signal
             signal_dict = compute_signal()
             signal_dict = post_process_signal(signal_dict)
@@ -460,6 +461,9 @@ def check_strategy_submission_ready(dataframe: pd.DataFrame, # btc_df
         if not np.allclose(
             masked_wt, full_weights[probe.strftime('%Y-%m-%d')], rtol=1e-9, atol=1e-12
         ):
+            print(type(masked_wt), type(full_weights), type(full_weights[probe.strftime('%Y-%m-%d')]))
+            print(masked_wt)
+            print(full_weights[probe.strftime('%Y-%m-%d')])
             print(
                 f"[{probe.date()}] ❌ Forward-leakage detected (Δ={abs(masked_wt - full_weights[probe.strftime('%Y-%m-%d')]):.2e})"
             )

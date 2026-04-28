@@ -248,10 +248,11 @@ def plot_quantile_return_density(lag_res, feature):
         return_period = f'return_{period}d'
         df = lag_res.loc[feature, return_period]
         i, j = coordinates[k]
+        
         sns.kdeplot(
                 data=df,
                 ax=ax[i][j],
-            ).set_title(f'Quantile-Return-Density - {feature, period}')
+            ).set_title(f'Quantile-Return-Density - {feature, period}').set(fontsize=20)
         k += 1
 
     plt.show()

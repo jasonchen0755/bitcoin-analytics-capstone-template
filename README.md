@@ -3,7 +3,7 @@
 The goal of this project is to design a dynamic Dollar-Cost-Average strategy, which adopts long-only method, helping accumulate as much bitcoins as it could, and significantly outperforming passive uniform DCA strategy.
 While the ultimate purpose of analytics is to give predictive signals, helping not only in accumulating, but also in trading transactions, it is temping to develop a model which could ouput credible future price/return forcasts. 
 
-In this project, I have developed two models to predict future return. One is a simple linear regression method, the other uses Mamba achietecture as basic blocks of a 4-layers deep learning model. Then the algorithms use predicted results either as signal, or as booster of uniform weights. The final model combined metrics used in the two models. Specifically, the signals first boosted by Mamba predictions, then amplified by technical and on-chain metrics which are helpful to detect paradigm shift. The final model wins **71.84%** of the test windows over uniform strategy.
+In this project, I have developed two models to predict future return. One is a simple linear regression method, the other uses Mamba achietecture as basic blocks of a 4-layers deep learning model. Then the algorithms use predicted results either as signal, or as booster of uniform weights. The final model combined metrics used in the two models. Specifically, the signals first boosted by Mamba predictions, then amplified by technical and on-chain metrics which are helpful to detect paradigm shift. The final model wins **70.20%** of the test windows over uniform strategy.
 
 **NOTE** 
 
@@ -39,7 +39,7 @@ Extra packages are needed to run backtests (see requirements.txt). The mamba-ssm
 
     <img src='model/output_final/performance_comparison.svg' width=800>
 
-    The final model starts from signals learned by mamba method, then introduces Mayer-multiple as metrics to identify paradigm shift. When paradigm seems shifted, the model amplifies signals if RSI and HarshRate fell in extreme quantiles. The final model prevails Uniform strategy with **71.84%** win rate.
+    The final model starts from signals learned by mamba method, then introduces Mayer-multiple as metrics to identify paradigm shift. When paradigm seems shifted, the model amplifies signals if RSI and HarshRate fell in extreme quantiles. The final model prevails Uniform strategy with **70.20%** win rate.
 
     ```python
     # (1) Rolling sd: Here we use 3 days rolling standard deviation of 
@@ -202,9 +202,9 @@ Extra packages are needed to run backtests (see requirements.txt). The mamba-ssm
 
     | Metrics |  30d   |  60d  |  90d  |  120d |
     |---------|--------|-------|-------|-------|
-    | MSE | 3.2640838e-03 | 2.4250933e-04 | 1.5079099e-04 | 9.9083205e-05 |
-    | MAE | 2.4871876 | 2.7896104 | 1.9521879 | 1.036711 |
-    | Direction Accuracy | 0.57798165 | 0.72247706 | 0.71330275 | 0.90825688 |
+    | MSE | 3.3770271e-03 | 3.4149311e-04 | 1.1235845e-04 | 6.5178509e-05 |
+    | MAE | 2.8666942 | 4.0978513 | 1.1340048 | 0.893708 |
+    | Direction Accuracy | 0.59633028 | 0.75917431 |0.78440367 | 0.91513761|
 
     The model predicts future returns based on historical features with sequence length of 128 time steps. So it is expected that the 120d horizon reports best metrics. And this design is intended since we are adopting long-only philosophy. 
 

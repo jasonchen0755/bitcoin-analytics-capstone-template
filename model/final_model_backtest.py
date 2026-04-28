@@ -92,6 +92,12 @@ def compute_signal() -> dict:
     """
     start_date = '2018-01-01'
     end_date = '2025-12-31'    
+
+    # validation ended date of each periodical model
+    val_end_date = ['2017-09-03', '2018-03-03', '2018-09-03', '2019-03-04', '2019-08-18',
+                    '2020-01-28', '2020-07-12', '2020-12-22', '2021-06-05', '2021-11-15',
+                    '2022-04-30', '2022-10-11', '2023-03-25', '2023-09-04', '2024-03-06']
+
     # 1. load features in date range
     # the mamba model use leading 128 timestep data to predict current date signal
     # and that's the reason I should retrieve feature dataset instead of using df_window
@@ -126,12 +132,22 @@ def compute_signal() -> dict:
     for d_idx, d in enumerate(pbar):
         curr_range = test_range[d: d+365]
         # load model corresponded to current range
-        model_idx = (curr_range[-1].strftime('%Y-%m-%d') <= np.array(model_list)).tolist().index(True) 
-        if model_idx > curr_model:
+        # model_idx = (curr_range[-1].strftime('%Y-%m-%d') <= np.array(model_list)).tolist().index(True) - 1
+
+        # test window start date should be later than validation ended date of current model
+        # for example, 'model_2019-06-30.pt' ended validation at 2018-03-03, test window start from this day uses this model;
+        # until 2018-09-03, 'model_2019-12-31.pt' validation end point, test windows could switch to this newer model
+        try:
+            model_idx = (curr_range[0].strftime('%Y-%m-%d') <= np.array(val_end_date)).tolist().index(True) - 1
+        except:
+            model_idx = len(model_list) - 1
+
+        if model_idx > curr_model: 
             model_name = f'model/checkpoint/model_{model_list[model_idx]}.pt'
             print(f'loading model...{model_name}')            
             model.load_state_dict(torch.load(model_name))
             curr_model += 1
+        pbar.set_description(f'window start {curr_range[0]}, model: {model_list[model_idx]}')
         
         # current date signal is predicted by previous 128 time step data
         X_test = X[dataset_range.tolist().index(curr_range[0])-128: dataset_range.tolist().index(curr_range[-1])+1]
@@ -154,6 +170,10 @@ def compute_signal() -> dict:
 
         # the signal is a dictionary with keys are the first day of current range
         results[curr_range[0].strftime('%Y-%m-%d')] = signal.tolist()    
+
+    #new added
+    # with open ('model/output_new/new_signals.json', 'w') as f:
+    #     json.dump(results, f)
 
     return results
 
@@ -223,7 +243,7 @@ def compute_quantile_winrate(features: pd.DataFrame,
     for offset in ('030', '060', '090', '182'):
         pointer, return_period = int(offset), f'return_{offset}d'
         for feature in WIN_RATE_FEATS:
-            subset = all_res.loc[feature].loc[return_period].shift(pointer).bfill().reset_index()
+            subset = all_res.loc[feature].loc[return_period].shift(pointer).bfill().reset_index() # type: ignore
             subset['feature'] = feature
             subset['return_period'] = return_period
             subset = subset.set_index(['feature', 'return_period', 'time'])
@@ -239,13 +259,22 @@ def post_process_signal(_Signal,
                         end='2025-12-31',
                         qa=0.1,
                         qb=0.9):
-    
+    """
+    apply two stages of regime shift discriminators on time series;
+    only when conditions met, the model apply amplifiers on signal;
+    (1) when predicted signal >= 0.8 * historical rolling sd of return_030d,
+        the weight will be boosted by predicted signal;
+    (2) when mayer multiple <= 1.2,
+        the weight will be boosted by whether hashrate_ma7_ma30 or rsi exceed extreme quantile    
+    otherwise, adopt original weight
+    """
     from model.LinReg import _prepare_dataset
     from model.utils import compute_btc_returns
     x, y = _prepare_dataset()
     _, quantiles = compute_quantile_winrate(x, y)
     res = compute_btc_returns()
-    res_std_030d = res['return_030d'].rolling(3).std().bfill().shift(1).loc['2018-01-01':]
+    # 30 days return rectifier, 3 days rolling, shift by 30
+    res_std_030d = res['return_030d'].rolling(3).std().bfill().shift(30).loc['2018-01-01':]
 
     features = x.loc[start: end].copy() # type: ignore    
     q_hashrate = quantiles.loc[[qa,qb], 'HashRate_ma7_ma30']
@@ -259,16 +288,19 @@ def post_process_signal(_Signal,
     pbar = tqdm(range(len(window_start)), desc='Post Processing Signals...')
     for idx, d in enumerate(pbar):
         day = window_start[idx]
-        window_end = day + pd.offsets.DateOffset(364)
+        window_end = day + pd.offsets.DateOffset(364) # type: ignore
 
         signals = base_weight.copy()
 
         if mamba_signals is not None:
             mamba_signal_window = mamba_signals[day.strftime('%Y-%m-%d')]
+
+            # mamba signal boosts the weight only when 1st stage condition met
             signals = ((np.abs(mamba_signal_window) >= 0.8 * res_std_030d.loc[day]) * mamba_signal_window * 200 + 1) * base_weight
             signals = np.clip(signals, a_min=0, a_max=15)
 
-        if x.loc[day, 'Mayer_multiple'] <= 1.2:  #res_std_030d.loc[day] >= 0.025 and       
+        # hashrate and rsi boost weight only when 2nd stage condition met
+        if x.loc[day, 'Mayer_multiple'] <= 1.2:  # type: ignore        
             q1_hashrate = -.01 * (features.loc[day:window_end, 'HashRate_ma7_ma30'].values <= q_hashrate.loc[qa, day:window_end].values)
             q9_hashrate = 30 * (features.loc[day:window_end, 'HashRate_ma7_ma30'].values >= q_hashrate.loc[qb, day:window_end].values)
 
@@ -279,7 +311,7 @@ def post_process_signal(_Signal,
             signals = np.clip(signals, a_min=0, a_max=15) 
 
         signals = allocate_sequential_stable(signals, len(signals))
-        post_processed_signals[day.strftime('%Y-%m-%d')] = signals
+        post_processed_signals[day.strftime('%Y-%m-%d')] = signals.tolist()
     return post_processed_signals
 
 def compute_weights_wrapper(df_window: pd.DataFrame) -> np.ndarray:
@@ -326,10 +358,10 @@ def main():
     else:
         _SIGNAL = compute_signal()
         _SIGNAL = post_process_signal(_SIGNAL)
-        _SIGNAL = {k:v.tolist() for k,v in _SIGNAL.items()}
         with open('data/dca/final_model_signals.json', 'w') as file:
             json.dump(_SIGNAL, file) # type: ignore
-
+    _SIGNAL = {k:np.array(v) for k,v in _SIGNAL.items()}
+    
     run_full_analysis(
         btc_df=btc_df,
         signal_dict = _SIGNAL,
@@ -346,20 +378,24 @@ def fast_backtest(start='2018-01-01',
                   end='2025-12-31',
                   qa=0.1,
                   qb=0.9):
-    
+    """
+    a fast backtest to see if algorithm work
+    """
     from model.LinReg import _prepare_dataset
     from model.utils import compute_btc_returns
-    x, y = _prepare_dataset()
-    _, quantiles = compute_quantile_winrate(x, y)
+    x, _ = _prepare_dataset()
+    # _, quantiles = compute_quantile_winrate(x, y)
+    quantiles = pd.read_csv('data/dca/feature_quantiles.csv')
+    quantiles = quantiles.set_index(['quantile', 'time'])
     res = compute_btc_returns()
-    res_std_030d = res['return_030d'].rolling(3).std().bfill().shift(1).loc['2018-01-01':]
+    res_std_030d = res['return_030d'].rolling(3).std().bfill().shift(30).loc['2018-01-01':]
     price = res['price']
 
     features = x.loc[start: end].copy() # type: ignore    
     q_hashrate = quantiles.loc[[qa,qb], 'HashRate_ma7_ma30']
     q_rsi = quantiles.loc[[qa,qb], 'RSI']
 
-    with open ('data/dca/mamba_signals.json', 'r') as f:  
+    with open ('data/dca/final_model_signals.json', 'r') as f:  
         mamba_signals = json.load(f)
 
     base_weight = np.ones(365) / 365
@@ -369,20 +405,21 @@ def fast_backtest(start='2018-01-01',
     pbar = tqdm(range(len(window_start)), desc='Post Processing Signals...')
     for idx, d in enumerate(pbar):
         day = window_start[idx]
-        window_end = day + pd.offsets.DateOffset(364)
+        window_end = day + pd.offsets.DateOffset(364) # type: ignore
+        day, window_end = day.strftime('%Y-%m-%d'), window_end.strftime('%Y-%m-%d')
 
         signals = base_weight.copy()
 
-        mamba_signal_window = mamba_signals[day.strftime('%Y-%m-%d')]
+        mamba_signal_window = mamba_signals[day]
         signals = ((np.abs(mamba_signal_window) >= 0.8 * res_std_030d.loc[day]) * mamba_signal_window * 200 + 1) * base_weight
         signals = np.clip(signals, a_min=0, a_max=15)
 
-        if x.loc[day, 'Mayer_multiple'] <= 1.2:   #res_std_030d.loc[day] >= 0.0005 and      
-            q1_hashrate = -.1 * (features.loc[day:window_end, 'HashRate_ma7_ma30'].values <= q_hashrate.loc[qa, day:window_end].values)
-            q9_hashrate = 30* (features.loc[day:window_end, 'HashRate_ma7_ma30'].values >= q_hashrate.loc[qb, day:window_end].values)
+        if x.loc[day, 'Mayer_multiple'] <= 1.2:         # type: ignore
+            q1_hashrate = -.1 * (features.loc[day:window_end, 'HashRate_ma7_ma30'].values <= q_hashrate.loc[qa, day:window_end].values) # type: ignore
+            q9_hashrate = 30* (features.loc[day:window_end, 'HashRate_ma7_ma30'].values >= q_hashrate.loc[qb, day:window_end].values) # type: ignore
 
             # q1_rsi = -.01 * (features.loc[day:window_end, 'RSI'].values <= q_rsi.loc[qa, day:window_end].values)
-            q9_rsi = 30 * (features.loc[day:window_end, 'RSI'].values >= q_rsi.loc[qb, day:window_end].values)
+            q9_rsi = 30 * (features.loc[day:window_end, 'RSI'].values >= q_rsi.loc[qb, day:window_end].values) # type: ignore
 
             signals = signals + q9_rsi + q9_hashrate + q1_hashrate # + q1_rsi
             signals = np.clip(signals, a_min=0, a_max=15) 
@@ -399,11 +436,9 @@ def fast_backtest(start='2018-01-01',
         pbar.set_description(f'{win}/{idx+1}, model:{model_collection}, uniform:{uniform_collection}')
 
     history = np.array(history)
-    print(f'surplus:{history[:,0].sum()- history[:,1].sum()}')
+    print(f'model:{history[:,0].sum()}, uniform:{history[:,1].sum()},surplus:{history[:,0].sum()- history[:,1].sum()}')
     plt.fill_between(window_start, 0, (history[:,0]-history[:,1]).cumsum())
     plt.title('cumulated surplus')
     plt.show()
     
-
-
 

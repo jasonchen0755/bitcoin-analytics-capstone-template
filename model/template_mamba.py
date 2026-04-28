@@ -160,6 +160,7 @@ def train(
 
     best_val_loss = float('inf')
     best_state = None
+    loss_history = []
 
     for e in range(1, n_epochs + 1):
         model.train()
@@ -235,11 +236,12 @@ def train(
             if patience_counter >= patience:
                 print(f'Early stop at epoch {e}')
                 break
-
+        loss_history.append([train_loss, val_loss])
+    
     if best_state is not None:
         model.load_state_dict(best_state)
 
-    return model
+    return model, loss_history
 
 def evaluate(model, data_loader):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -352,10 +354,19 @@ def plot_eval(preds, y, col=['30d','60d','90d','120d']):
         ax[i][j].plot(preds[:,l], label='preds')
         ax[i][j].fill_between(preds[:,l]-sd, preds[:,l]+sd, alpha=0.2)
         ax[i][j].plot(y[:,l], label='true')
-        ax[i][j].set_title(f'Preds Vs True - {col[l]}')
-        ax[i][j].legend()
+        ax[i][j].set_title(f'Preds Vs True - {col[l]}', fontsize=20)
+        ax[i][j].legend(fontsize=16)
         k += 1
 
+    plt.show()
+
+def plot_loss(loss_history):
+    plt.figure(figsize=(12,8))
+    loss_history = np.array(loss_history)
+    plt.plot(loss_history[:, 0], linestyle='--', label='train loss')
+    plt.plot(loss_history[:, 1], linestyle='--', label='validation loss')
+    plt.title('Train/Validation loss history', fontsize=20)
+    plt.legend(fontsize=16)
     plt.show()
 
 def main():
@@ -379,7 +390,8 @@ def main():
     model.apply(init_weights)
 
     print('training...')
-    model = train(model, train_loader, val_loader, n_epochs=60, lr=1e-3)
+    model,loss = train(model, train_loader, val_loader, n_epochs=120, lr=1e-3)
+    # model.load_state_dict(torch.load('model/checkpoint/model_2025-12-31.pt'))
     print('evaluating...')
     metrics, preds, targets = evaluate(model, test_loader)
     print("MSE per horizon [30,60,90,120]:", metrics["mse"])
@@ -400,6 +412,7 @@ def main():
         print(f'{h}: {metrics["mse"][i]:.6f} [{ci_lower[i]:.6f}, {ci_upper[i]: .6f}]')
 
     plot_eval(preds, targets)
+    plot_loss(loss_history=loss)
 
 if __name__ == '__main__':
     main()
